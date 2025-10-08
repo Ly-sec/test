@@ -3,7 +3,7 @@
   "id": "weather-widget",
   "version": "1.2.0",
   "description": "A beautiful weather widget that displays current weather conditions and temperature in the bar",
-  "author": "Ly-sec",
+  "author": "Ly-sectest",
   "license": "MIT",
   "noctaliaVersion": ">=1.0.0",
   "type": "bar-widget",
