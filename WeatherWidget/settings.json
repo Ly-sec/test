@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "location": "London",
+  "units": "metric",
+  "updateInterval": 30,
+  "showIcon": true,
+  "backgroundColor": "#2196F3"
+}
