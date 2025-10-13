@@ -2,65 +2,94 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Widgets
+import qs.Modules.Plugins
 
-ColumnLayout {
-  spacing: Style.marginL * scaling
-  
-  NText {
-    text: "Example Plugin Settings"
-    font.pixelSize: 16 * scaling
-    font.weight: Font.Bold
-    color: Color.mOnSurface
-  }
-  
-  NSpinBox {
-    label: "Refresh Interval (seconds)"
-    value: Settings.data.plugins.examplePlugin?.refreshInterval || 30
-    from: 5
-    to: 300
-    onValueChanged: {
-      if (!Settings.data.plugins.examplePlugin) {
-        Settings.data.plugins.examplePlugin = {}
-      }
-      Settings.data.plugins.examplePlugin.refreshInterval = value
+PluginSettings {
+    id: root
+    pluginId: "example-plugin"
+    
+    spacing: Style.marginM * scaling
+    
+    NText {
+        text: "Example Plugin Settings"
+        font.pixelSize: Style.fontSizeL * scaling
+        font.weight: Font.Bold
+        color: Color.mOnSurface
+        Layout.fillWidth: true
     }
-  }
-  
-  NToggle {
-    label: "Show Temperature"
-    checked: Settings.data.plugins.examplePlugin?.showTemperature !== false
-    onToggled: {
-      if (!Settings.data.plugins.examplePlugin) {
-        Settings.data.plugins.examplePlugin = {}
-      }
-      Settings.data.plugins.examplePlugin.showTemperature = checked
+    
+    NDivider {
+        Layout.fillWidth: true
     }
-  }
-  
-  NComboBox {
-    label: "Temperature Unit"
-    model: [
-      { key: "celsius", text: "Celsius" },
-      { key: "fahrenheit", text: "Fahrenheit" }
-    ]
-    currentKey: Settings.data.plugins.examplePlugin?.temperatureUnit || "celsius"
-    onSelected: {
-      if (!Settings.data.plugins.examplePlugin) {
-        Settings.data.plugins.examplePlugin = {}
-      }
-      Settings.data.plugins.examplePlugin.temperatureUnit = key
+    
+    StringSetting {
+        settingKey: "customMessage"
+        label: "Custom Message"
+        description: "The message to display when temperature is disabled"
+        placeholder: "Enter custom message..."
+        defaultValue: "Hello!"
     }
-  }
-  
-  NTextInput {
-    label: "Custom Message"
-    text: Settings.data.plugins.examplePlugin?.customMessage || "Hello!"
-    placeholderText: "Enter a custom message..."
-    onTextChanged: {
-      if (!Settings.data.plugins.examplePlugin) {
-        Settings.data.plugins.examplePlugin = {}
-      }
-      Settings.data.plugins.examplePlugin.customMessage = text
+    
+    ToggleSetting {
+        settingKey: "showTemperature"
+        label: "Show Temperature"
+        description: "Display random temperature instead of custom message"
+        defaultValue: true
     }
-  }
+    
+    SelectionSetting {
+        settingKey: "temperatureUnit"
+        label: "Temperature Unit"
+        description: "Choose between Celsius and Fahrenheit"
+        options: [
+            {label: "Celsius", value: "celsius"},
+            {label: "Fahrenheit", value: "fahrenheit"}
+        ]
+        defaultValue: "celsius"
+    }
+    
+    // Custom slider for refresh interval
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: Style.marginS * scaling
+        
+        NText {
+            text: "Refresh Interval"
+            font.pixelSize: Style.fontSizeM * scaling
+            font.weight: Font.Medium
+            color: Color.mOnSurface
+        }
+        
+        NText {
+            text: "How often to update the display (in seconds)"
+            font.pixelSize: Style.fontSizeS * scaling
+            color: Color.mOnSurfaceVariant
+            wrapMode: Text.WordWrap
+        }
+        
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Style.marginM * scaling
+            
+            NSlider {
+                id: intervalSlider
+                Layout.fillWidth: true
+                from: 5
+                to: 60
+                stepSize: 5
+                value: root.loadValue("refreshInterval", 30)
+                
+                onValueChanged: {
+                    root.saveValue("refreshInterval", Math.round(value))
+                }
+            }
+            
+            NText {
+                text: `${Math.round(intervalSlider.value)}s`
+                font.pixelSize: Style.fontSizeM * scaling
+                color: Color.mOnSurfaceVariant
+                Layout.preferredWidth: 30 * scaling
+            }
+        }
+    }
 }
