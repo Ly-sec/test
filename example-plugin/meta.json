@@ -1,9 +1,0 @@
-{
-  "id": "example-plugin",
-  "name": "Example Plugin",
-  "description": "A demonstration plugin with settings",
-  "version": "1.0.0",
-  "author": "Noctalia Team",
-  "type": "widget"
-}
-
