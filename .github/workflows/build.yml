@@ -1,61 +1,81 @@
-name: Build & Publish XBPS Repo
+name: Build & Publish XBPS Repo (Void container)
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   build:
+    # Run the steps inside an official Void Linux container
     runs-on: ubuntu-latest
-
+    container:
+      image: voidlinux/voidlinux:latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install minimal tools (in-container)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y xbps
+          # ensure basic tools present; xbps should exist in Void image
+          xbps-install -Suy --yes xbps
+          xbps-install -Sy --yes git python3 findutils
+
+      - name: Clone void-packages
+        run: |
+          git clone https://github.com/void-linux/void-packages.git void-packages
+          cd void-packages
+          git rev-parse --abbrev-ref HEAD || true
+
+      - name: Copy our templates into void-packages
+        run: |
+          # Adjust path if your templates live elsewhere
+          cp -r "${GITHUB_WORKSPACE}/templates" ./ || true
+          ls -la ./templates || true
 
       - name: Bootstrap xbps-src
         run: |
-          git clone https://github.com/void-linux/void-packages.git
           cd void-packages
           ./xbps-src binary-bootstrap
 
-      - name: Copy templates
-        run: |
-          cp -r templates void-packages/
-
-      - name: Build packages
+      - name: Build all templates
         run: |
           cd void-packages
-          for pkg in templates/*; do
-            ./xbps-src pkg $(basename "$pkg")
-          done
           mkdir -p ../repo
-          cp -v hostdir/binpkgs/*.xbps ../repo/
+          # Build each template folder name (skip non-directories)
+          for t in ../templates/*; do
+            [ -d "$t" ] || continue
+            pkg=$(basename "$t")
+            echo "=== Building: $pkg ==="
+            ./xbps-src pkg "$pkg" || { echo "Build failed for $pkg"; exit 1; }
+          done
+          # copy output packages
+          cp -v hostdir/binpkgs/*.xbps ../repo/ || true
+          ls -la ../repo || true
 
-      - name: Build repo index
+      - name: Create repo index
         run: |
-          cd repo
-          xbps-rindex -a *.xbps
+          cd repo || exit 0
+          if ls *.xbps 1> /dev/null 2>&1; then
+            xbps-rindex -a *.xbps
+          else
+            echo "No xbps built — nothing to index"
+          fi
 
-      - name: Upload repo artifact
+      - name: Upload repo artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
 
   deploy:
     needs: build
+    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
     environment:
       name: github-pages
-
-    runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
