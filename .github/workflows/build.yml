@@ -20,9 +20,58 @@ jobs:
             -v "${{ github.workspace }}":/workspace \
             -w /workspace \
             voidlinux/voidlinux:latest \
-            /bin/sh -c "
+            bash -c '
               set -ex
               
+              # Set fast Void mirror
+              mkdir -p /etc/xbps.d
+              cat > /etc/xbps.d/00-repository.conf << "EOFMIRROR"
+          repository=https://repo-fastly.voidlinux.org/current
+          repository=https://repo-fastly.voidlinux.org/current/nonfree
+          repository=https://repo-fastly.voidlinux.org/current/multilib
+          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+          EOFMIRROR
+              
+              # Update xbps and system
+              xbps-install -Sy
+              xbps-install -y -u xbps
+              xbps-install -y -u
+              xbps-install -y git ca-certificates libstdc++ libgcc tar gzip bash
+              
+              # Clone void-packages if missing
+              if [ ! -d void-packages ]; then
+                git clone --depth=1 https://github.com/void-linux/void-packages.git
+              fi
+              
+              cd void-packages
+              
+              # Make xbps-src executable
+              chmod +x xbps-src
+              
+              # Check if xbps-src exists and is executable
+              ls -la xbps-src
+              file xbps-src
+              
+              # Bootstrap binary environment
+              bash ./xbps-src binary-bootstrap
+              
+              # Build only our custom packages
+              for pkg in /workspace/srcpkgs/*; do
+                [ -d "$pkg" ] || continue
+                pkgname=$(basename "$pkg")
+                echo "::group::Building $pkgname"
+                bash ./xbps-src pkg "$pkgname" || echo "Failed to build $pkgname"
+                echo "::endgroup::"
+              done
+              
+              # Copy built packages to shared workspace
+              if ls hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
+                cp hostdir/binpkgs/*/*.xbps /workspace/repo/
+                echo "Packages copied successfully"
+              else
+                echo "No packages found to copy"
+              fi
+            '
       
       - name: Verify repo contents
         run: |
