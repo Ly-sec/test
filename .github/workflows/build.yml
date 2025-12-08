@@ -1,0 +1,61 @@
+name: Build & Publish XBPS Repo
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xbps
+
+      - name: Bootstrap xbps-src
+        run: |
+          git clone https://github.com/void-linux/void-packages.git
+          cd void-packages
+          ./xbps-src binary-bootstrap
+
+      - name: Copy templates
+        run: |
+          cp -r templates void-packages/
+
+      - name: Build packages
+        run: |
+          cd void-packages
+          for pkg in templates/*; do
+            ./xbps-src pkg $(basename "$pkg")
+          done
+          mkdir -p ../repo
+          cp -v hostdir/binpkgs/*.xbps ../repo/
+
+      - name: Build repo index
+        run: |
+          cd repo
+          xbps-rindex -a *.xbps
+
+      - name: Upload repo artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: repo
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
