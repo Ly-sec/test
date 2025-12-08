@@ -13,9 +13,6 @@ jobs:
       image: voidlinux/voidlinux:latest
 
     steps:
-      # -----------------------------------------------------
-      # Fix Void repo mirrors (most important step for GHA)
-      # -----------------------------------------------------
       - name: Set stable VoidLinux mirror
         run: |
           cat > /etc/xbps.d/00-repository.conf <<EOF
@@ -25,12 +22,14 @@ jobs:
           repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
           EOF
 
-      # -----------------------------------------------------
-      # Install what GitHub Actions needs (Node deps, git, TLS)
-      # -----------------------------------------------------
+      - name: Update xbps (required)
+        run: |
+          xbps-install -Sy
+          xbps-install -y -u xbps
+
       - name: Install system dependencies
         run: |
-          xbps-install -Syu
+          xbps-install -y -u
           xbps-install -y \
             git \
             ca-certificates \
@@ -38,23 +37,14 @@ jobs:
             libgcc \
             tar gzip
 
-      # -----------------------------------------------------
-      # Checkout your repo
-      # -----------------------------------------------------
       - uses: actions/checkout@v4
 
-      # -----------------------------------------------------
-      # Install void-packages build system (xbps-src)
-      # -----------------------------------------------------
       - name: Install xbps-src (void-packages)
         run: |
           git clone https://github.com/void-linux/void-packages.git
           cd void-packages
           ./xbps-src binary-bootstrap
 
-      # -----------------------------------------------------
-      # Build all packages in srcpkgs/*
-      # -----------------------------------------------------
       - name: Build packages
         run: |
           cd void-packages
@@ -66,35 +56,21 @@ jobs:
             echo "::endgroup::"
           done
 
-      # -----------------------------------------------------
-      # Collect xbpc packages into repo/
-      # -----------------------------------------------------
       - name: Collect packages
         run: |
           mkdir -p repo
           cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
 
-      # -----------------------------------------------------
-      # Generate repository index (xbps-rindex)
-      # -----------------------------------------------------
       - name: Generate repository index
         run: |
           xbps-rindex -a repo/*.xbps
-
-          # Optional: sign repository (ignore failure if no keys)
           xbps-rindex --sign --signedby "github-actions" repo || true
 
-      # -----------------------------------------------------
-      # Upload repo to GitHub Pages
-      # -----------------------------------------------------
-      - name: Upload repo artifact for Pages
+      - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
 
-  # ---------------------------------------------------------
-  # Deploy Phase
-  # ---------------------------------------------------------
   deploy:
     needs: build
     permissions:
