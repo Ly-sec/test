@@ -50,7 +50,6 @@ jobs:
               
               # Check if xbps-src exists and is executable
               ls -la xbps-src
-              file xbps-src
               
               # Bootstrap binary environment
               bash ./xbps-src binary-bootstrap
