@@ -10,20 +10,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # -----------------------------------------------------
-      # Checkout your repository
-      # -----------------------------------------------------
       - uses: actions/checkout@v4
-
-      # -----------------------------------------------------
-      # Install Docker (needed to run Void container)
-      # -----------------------------------------------------
-      - name: Install Docker
-        run: sudo apt-get update && sudo apt-get install -y docker.io
-
-      # -----------------------------------------------------
-      # Build packages in Void container
-      # -----------------------------------------------------
+      
       - name: Build packages in Void container
         run: |
           docker run --rm \
@@ -75,9 +63,6 @@ jobs:
               xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
             "
 
-      # -----------------------------------------------------
-      # Upload repo artifact for GitHub Pages
-      # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
