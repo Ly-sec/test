@@ -13,32 +13,49 @@ jobs:
       image: voidlinux/voidlinux:latest
 
     steps:
-      # -----------------------------------------
-      # Prepare Void container
-      # -----------------------------------------
-      - name: Install base dependencies for GitHub Actions
+      # -----------------------------------------------------
+      # Fix Void repo mirrors (most important step for GHA)
+      # -----------------------------------------------------
+      - name: Set stable VoidLinux mirror
+        run: |
+          cat > /etc/xbps.d/00-repository.conf <<EOF
+          repository=https://repo-fastly.voidlinux.org/current
+          repository=https://repo-fastly.voidlinux.org/current/nonfree
+          repository=https://repo-fastly.voidlinux.org/current/multilib
+          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+          EOF
+
+      # -----------------------------------------------------
+      # Install what GitHub Actions needs (Node deps, git, TLS)
+      # -----------------------------------------------------
+      - name: Install system dependencies
         run: |
           xbps-install -Syu
-          xbps-install -y git ca-certificates libstdc++ libgcc tar gzip
+          xbps-install -y \
+            git \
+            ca-certificates \
+            libstdc++ \
+            libgcc \
+            tar gzip
 
-      # -----------------------------------------
-      # Checkout repo
-      # -----------------------------------------
+      # -----------------------------------------------------
+      # Checkout your repo
+      # -----------------------------------------------------
       - uses: actions/checkout@v4
 
-      # -----------------------------------------
-      # Clone void-packages build system
-      # -----------------------------------------
+      # -----------------------------------------------------
+      # Install void-packages build system (xbps-src)
+      # -----------------------------------------------------
       - name: Install xbps-src (void-packages)
         run: |
           git clone https://github.com/void-linux/void-packages.git
           cd void-packages
           ./xbps-src binary-bootstrap
 
-      # -----------------------------------------
-      # Build packages
-      # -----------------------------------------
-      - name: Build all packages in srcpkgs
+      # -----------------------------------------------------
+      # Build all packages in srcpkgs/*
+      # -----------------------------------------------------
+      - name: Build packages
         run: |
           cd void-packages
           for pkg in ../srcpkgs/*; do
@@ -49,33 +66,35 @@ jobs:
             echo "::endgroup::"
           done
 
-      # -----------------------------------------
-      # Collect built packages
-      # -----------------------------------------
-      - name: Collect xbpc packages
+      # -----------------------------------------------------
+      # Collect xbpc packages into repo/
+      # -----------------------------------------------------
+      - name: Collect packages
         run: |
           mkdir -p repo
           cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
 
-      # -----------------------------------------
-      # Generate repository index
-      # -----------------------------------------
+      # -----------------------------------------------------
+      # Generate repository index (xbps-rindex)
+      # -----------------------------------------------------
       - name: Generate repository index
         run: |
           xbps-rindex -a repo/*.xbps
+
+          # Optional: sign repository (ignore failure if no keys)
           xbps-rindex --sign --signedby "github-actions" repo || true
 
-      # -----------------------------------------
-      # Upload to GitHub Pages
-      # -----------------------------------------
-      - name: Upload repo as GitHub Pages artifact
+      # -----------------------------------------------------
+      # Upload repo to GitHub Pages
+      # -----------------------------------------------------
+      - name: Upload repo artifact for Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
 
-  # -----------------------------------------
-  # Deploy to Pages
-  # -----------------------------------------
+  # ---------------------------------------------------------
+  # Deploy Phase
+  # ---------------------------------------------------------
   deploy:
     needs: build
     permissions:
