@@ -63,15 +63,26 @@ jobs:
               su - builder -c "
                 cd /workspace/void-packages
                 
-                # Bootstrap binary environment
-                ./xbps-src binary-bootstrap
+                # Copy custom packages from /workspace/srcpkgs to void-packages/srcpkgs
+                echo \"Copying custom packages...\"
+                for pkg in /workspace/srcpkgs/*; do
+                  [ -d \"\$pkg\" ] || continue
+                  pkgname=\$(basename \"\$pkg\")
+                  echo \"Copying \$pkgname to void-packages/srcpkgs/\"
+                  cp -r \"\$pkg\" /workspace/void-packages/srcpkgs/
+                done
                 
-                # Build only our custom packages
+                # Bootstrap binary environment
+                echo \"::group::Bootstrap binary environment\"
+                ./xbps-src binary-bootstrap
+                echo \"::endgroup::\"
+                
+                # Build custom packages
                 for pkg in /workspace/srcpkgs/*; do
                   [ -d \"\$pkg\" ] || continue
                   pkgname=\$(basename \"\$pkg\")
                   echo \"::group::Building \$pkgname\"
-                  ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
+                  ./xbps-src pkg \"\$pkgname\"
                   echo \"::endgroup::\"
                 done
               "
