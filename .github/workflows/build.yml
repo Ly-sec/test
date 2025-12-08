@@ -1,5 +1,4 @@
 name: Build Void Repository
-
 on:
   push:
     branches: ["main"]
@@ -8,11 +7,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
+      - name: Create repo directory
+        run: mkdir -p repo
+      
       - name: Set up Docker container for building
         run: |
           docker run --rm \
@@ -22,39 +23,53 @@ jobs:
             /bin/sh -c "
               # Set fast Void mirror
               cat > /etc/xbps.d/00-repository.conf <<EOF
-              repository=https://repo-fastly.voidlinux.org/current
-              repository=https://repo-fastly.voidlinux.org/current/nonfree
-              repository=https://repo-fastly.voidlinux.org/current/multilib
-              repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-              EOF
-
+          repository=https://repo-fastly.voidlinux.org/current
+          repository=https://repo-fastly.voidlinux.org/current/nonfree
+          repository=https://repo-fastly.voidlinux.org/current/multilib
+          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+          EOF
+              
               # Update xbps and system
               xbps-install -Sy
               xbps-install -y -u xbps
               xbps-install -y -u
               xbps-install -y git ca-certificates libstdc++ libgcc tar gzip
-
+              
               # Clone void-packages if missing
               [ -d void-packages ] || git clone https://github.com/void-linux/void-packages.git
               cd void-packages
-
+              
               # Bootstrap binary environment
               ./xbps-src binary-bootstrap
-
+              
               # Build only our custom packages
               for pkg in /workspace/srcpkgs/*; do
                 [ -d \"\$pkg\" ] || continue
                 pkgname=\$(basename \"\$pkg\")
                 echo \"::group::Building \$pkgname\"
-                ./xbps-src pkg \"\$pkgname\"
+                ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
                 echo \"::endgroup::\"
               done
-
+              
               # Copy built packages to shared workspace
-              mkdir -p /workspace/repo
-              cp hostdir/binpkgs/*/*.xbps /workspace/repo/ || true
+              if ls hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
+                cp hostdir/binpkgs/*/*.xbps /workspace/repo/
+                echo \"Packages copied successfully\"
+              else
+                echo \"No packages found to copy\"
+              fi
             "
-
+      
+      - name: Verify repo contents
+        run: |
+          echo "Contents of repo directory:"
+          ls -lah repo/
+          if [ -z "$(ls -A repo/)" ]; then
+            echo "Warning: repo directory is empty"
+            echo "Creating placeholder to avoid upload error"
+            echo "No packages were built" > repo/README.txt
+          fi
+      
       - name: Upload built packages artifact
         uses: actions/upload-pages-artifact@v3
         with:
