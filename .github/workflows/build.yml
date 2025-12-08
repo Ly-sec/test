@@ -13,15 +13,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Void builder and build packages
+      - name: Set up Docker container for building
         run: |
-          # Run everything inside Void Linux Docker container
           docker run --rm \
             -v "${{ github.workspace }}":/workspace \
             -w /workspace \
             voidlinux/voidlinux:latest \
-            sh -c "
-              # Set fast stable mirrors
+            /bin/sh -c "
+              # Set fast Void mirror
               cat > /etc/xbps.d/00-repository.conf <<EOF
               repository=https://repo-fastly.voidlinux.org/current
               repository=https://repo-fastly.voidlinux.org/current/nonfree
@@ -29,49 +28,34 @@ jobs:
               repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
               EOF
 
-              # Update xbps and install dependencies
-              xbps-install -Sy xbps git tar gzip
+              # Update xbps and system
+              xbps-install -Sy
+              xbps-install -y -u xbps
+              xbps-install -y -u
+              xbps-install -y git ca-certificates libstdc++ libgcc tar gzip
 
-              # Clone void-packages and bootstrap
-              git clone https://github.com/void-linux/void-packages.git
+              # Clone void-packages if missing
+              [ -d void-packages ] || git clone https://github.com/void-linux/void-packages.git
               cd void-packages
+
+              # Bootstrap binary environment
               ./xbps-src binary-bootstrap
 
-              # Copy your packages into void-packages/srcpkgs
-              mkdir -p srcpkgs
-              cp -r /workspace/srcpkgs/* srcpkgs/
-
-              # Build only your packages
-              for pkg in srcpkgs/*; do
+              # Build only our custom packages
+              for pkg in /workspace/srcpkgs/*; do
                 [ -d \"\$pkg\" ] || continue
                 pkgname=\$(basename \"\$pkg\")
-                echo \"Building \$pkgname\"
-                ./xbps-src pkg \$pkgname
+                echo \"::group::Building \$pkgname\"
+                ./xbps-src pkg \"\$pkgname\"
+                echo \"::endgroup::\"
               done
 
-              # Collect built packages
+              # Copy built packages to shared workspace
               mkdir -p /workspace/repo
-              cp hostdir/binpkgs/*/*.xbps /workspace/repo/
-
-              # Generate repo index
-              xbps-rindex -a /workspace/repo/*.xbps
-              xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
+              cp hostdir/binpkgs/*/*.xbps /workspace/repo/ || true
             "
 
-      - name: Upload repository artifact
+      - name: Upload built packages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
-
-  deploy:
-    needs: build
-    permissions:
-      pages: write
-      id-token: write
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-
-    steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
