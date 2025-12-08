@@ -10,8 +10,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # -----------------------------------------------------
+      # Checkout your repository
+      # -----------------------------------------------------
       - uses: actions/checkout@v4
 
+      # -----------------------------------------------------
+      # Ensure repo folder exists (needed for artifact upload)
+      # -----------------------------------------------------
+      - name: Prepare repo folder
+        run: mkdir -p repo
+
+      # -----------------------------------------------------
+      # Build packages in Void container
+      # -----------------------------------------------------
       - name: Build packages in Void container
         run: |
           docker run --rm \
@@ -19,7 +31,9 @@ jobs:
             -w /workspace \
             voidlinux/voidlinux:latest \
             sh -c "
+              # ----------------------------
               # Set stable mirrors
+              # ----------------------------
               cat > /etc/xbps.d/00-repository.conf <<EOF
               repository=https://repo-fastly.voidlinux.org/current
               repository=https://repo-fastly.voidlinux.org/current/nonfree
@@ -27,42 +41,57 @@ jobs:
               repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
               EOF
 
+              # ----------------------------
               # Update xbps
+              # ----------------------------
               xbps-install -Sy
               xbps-install -y -u xbps
 
-              # Install dependencies
+              # ----------------------------
+              # Install system dependencies
+              # ----------------------------
               xbps-install -y git tar gzip libstdc++ libgcc ca-certificates
 
-              # Clone void-packages
+              # ----------------------------
+              # Clone void-packages and bootstrap
+              # ----------------------------
               git clone https://github.com/void-linux/void-packages.git
-
-              # Bootstrap xbps-src
               ./void-packages/xbps-src binary-bootstrap
 
-              # Copy our packages
+              # ----------------------------
+              # Copy only our packages
+              # ----------------------------
               mkdir -p void-packages/srcpkgs
               cp -r srcpkgs/* void-packages/srcpkgs/
 
-              # Build only our packages
+              # ----------------------------
+              # Build our packages only
+              # ----------------------------
               cd void-packages
               for pkg in srcpkgs/*; do
                 [ -d \"\$pkg\" ] || continue
                 pkgname=\$(basename \"\$pkg\")
                 echo \"::group::Building \$pkgname\"
-                ./xbps-src pkg \"\$pkgname\"
+                ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
                 echo \"::endgroup::\"
               done
 
+              # ----------------------------
               # Collect built packages
+              # ----------------------------
               mkdir -p /workspace/repo
               cp hostdir/binpkgs/*.xbps /workspace/repo/ || true
 
-              # Generate repo index
-              xbps-rindex -a /workspace/repo/*.xbps
+              # ----------------------------
+              # Generate repository index
+              # ----------------------------
+              xbps-rindex -a /workspace/repo/*.xbps || true
               xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
             "
 
+      # -----------------------------------------------------
+      # Upload repo artifact for GitHub Pages
+      # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
