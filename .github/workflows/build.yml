@@ -72,6 +72,9 @@ jobs:
                   cp -r \"\$pkg\" /workspace/void-packages/srcpkgs/
                 done
                 
+                # Configure xbps-src to disable namespaces (GitHub Actions doesn't support them)
+                echo \"XBPS_CHROOT_CMD=ethereal\" > etc/conf
+                
                 # Bootstrap binary environment
                 echo \"::group::Bootstrap binary environment\"
                 ./xbps-src binary-bootstrap 2>&1
