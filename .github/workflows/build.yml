@@ -74,6 +74,10 @@ jobs:
               else
                 echo "No packages found to copy"
               fi
+              
+              # Fix permissions so GitHub Actions can access the files
+              chown -R 1001:121 /workspace/repo
+              chmod -R 755 /workspace/repo
             '
       
       - name: Verify repo contents
