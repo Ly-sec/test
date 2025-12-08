@@ -1,81 +1,92 @@
-name: Build & Publish XBPS Repo (Void container)
+name: Build Void Repository
 
 on:
   push:
-    branches: [ main ]
-  pull_request:
-    types: [opened, synchronize, reopened]
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   build:
-    # Run the steps inside an official Void Linux container
     runs-on: ubuntu-latest
+
     container:
       image: voidlinux/voidlinux:latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install minimal tools (in-container)
+      # -----------------------------------------
+      # Prepare Void container
+      # -----------------------------------------
+      - name: Install base dependencies for GitHub Actions
         run: |
-          # ensure basic tools present; xbps should exist in Void image
-          xbps-install -Suy --yes xbps
-          xbps-install -Sy --yes git python3 findutils
+          xbps-install -Syu
+          xbps-install -y git ca-certificates libstdc++ libgcc tar gzip
 
-      - name: Clone void-packages
-        run: |
-          git clone https://github.com/void-linux/void-packages.git void-packages
-          cd void-packages
-          git rev-parse --abbrev-ref HEAD || true
+      # -----------------------------------------
+      # Checkout repo
+      # -----------------------------------------
+      - uses: actions/checkout@v4
 
-      - name: Copy our templates into void-packages
+      # -----------------------------------------
+      # Clone void-packages build system
+      # -----------------------------------------
+      - name: Install xbps-src (void-packages)
         run: |
-          # Adjust path if your templates live elsewhere
-          cp -r "${GITHUB_WORKSPACE}/templates" ./ || true
-          ls -la ./templates || true
-
-      - name: Bootstrap xbps-src
-        run: |
+          git clone https://github.com/void-linux/void-packages.git
           cd void-packages
           ./xbps-src binary-bootstrap
 
-      - name: Build all templates
+      # -----------------------------------------
+      # Build packages
+      # -----------------------------------------
+      - name: Build all packages in srcpkgs
         run: |
           cd void-packages
-          mkdir -p ../repo
-          # Build each template folder name (skip non-directories)
-          for t in ../templates/*; do
-            [ -d "$t" ] || continue
-            pkg=$(basename "$t")
-            echo "=== Building: $pkg ==="
-            ./xbps-src pkg "$pkg" || { echo "Build failed for $pkg"; exit 1; }
+          for pkg in ../srcpkgs/*; do
+            [ -d "$pkg" ] || continue
+            pkgname=$(basename "$pkg")
+            echo "::group::Building $pkgname"
+            ./xbps-src pkg "$pkgname"
+            echo "::endgroup::"
           done
-          # copy output packages
-          cp -v hostdir/binpkgs/*.xbps ../repo/ || true
-          ls -la ../repo || true
 
-      - name: Create repo index
+      # -----------------------------------------
+      # Collect built packages
+      # -----------------------------------------
+      - name: Collect xbpc packages
         run: |
-          cd repo || exit 0
-          if ls *.xbps 1> /dev/null 2>&1; then
-            xbps-rindex -a *.xbps
-          else
-            echo "No xbps built — nothing to index"
-          fi
+          mkdir -p repo
+          cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
 
-      - name: Upload repo artifact for Pages
+      # -----------------------------------------
+      # Generate repository index
+      # -----------------------------------------
+      - name: Generate repository index
+        run: |
+          xbps-rindex -a repo/*.xbps
+          xbps-rindex --sign --signedby "github-actions" repo || true
+
+      # -----------------------------------------
+      # Upload to GitHub Pages
+      # -----------------------------------------
+      - name: Upload repo as GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
 
+  # -----------------------------------------
+  # Deploy to Pages
+  # -----------------------------------------
   deploy:
     needs: build
-    runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
