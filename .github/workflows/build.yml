@@ -60,7 +60,7 @@ jobs:
               chmod +x /workspace/void-packages/xbps-src
               
               # Run the build as the builder user
-              su - builder -c '
+              su - builder << 'BUILDER_EOF'
                 cd /workspace/void-packages
                 
                 # Copy custom packages from /workspace/srcpkgs to void-packages/srcpkgs
@@ -99,7 +99,7 @@ jobs:
                 echo "Checking for built packages..."
                 ls -lah hostdir/binpkgs/ || echo "No binpkgs directory"
                 find hostdir/binpkgs -name "*.xbps" || echo "No .xbps files found"
-              '
+BUILDER_EOF
               
               # Copy built packages to shared workspace (as root again)
               if ls /workspace/void-packages/hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
