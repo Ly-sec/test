@@ -60,49 +60,46 @@ jobs:
               chmod +x /workspace/void-packages/xbps-src
               
               # Run the build as the builder user
-              su - builder -c "
+              su - builder -c '
                 cd /workspace/void-packages
                 
                 # Copy custom packages from /workspace/srcpkgs to void-packages/srcpkgs
-                echo \"Copying custom packages...\"
+                echo "Copying custom packages..."
                 for pkg in /workspace/srcpkgs/*; do
-                  [ -d \"\$pkg\" ] || continue
-                  pkgname=\$(basename \"\$pkg\")
-                  echo \"Copying \$pkgname to void-packages/srcpkgs/\"
-                  cp -r \"\$pkg\" /workspace/void-packages/srcpkgs/
+                  [ -d "$pkg" ] || continue
+                  pkgname=$(basename "$pkg")
+                  echo "Copying $pkgname to void-packages/srcpkgs/"
+                  cp -r "$pkg" /workspace/void-packages/srcpkgs/
                 done
                 
-                # Configure xbps-src to disable namespaces (GitHub Actions doesn't support them)
-                echo \"XBPS_CHROOT_CMD=ethereal\" > etc/conf
+                # Configure xbps-src to disable namespaces (GitHub Actions does not support them)
+                echo "XBPS_CHROOT_CMD=ethereal" > etc/conf
                 
                 # Bootstrap binary environment
-                echo \"::group::Bootstrap binary environment\"
+                echo "::group::Bootstrap binary environment"
                 ./xbps-src binary-bootstrap 2>&1
-                echo \"::endgroup::\"
+                echo "::endgroup::"
                 
                 # Build custom packages
                 for pkg in /workspace/srcpkgs/*; do
-                  [ -d \"\$pkg\" ] || continue
-                  pkgname=\$(basename \"\$pkg\")
-                  echo \"::group::Building \$pkgname\"
-                  echo \"Running: ./xbps-src pkg \$pkgname\"
-                  ./xbps-src pkg \"\$pkgname\" 2>&1 || {
-                    echo \"Build failed for \$pkgname\"
-                    echo \"Checking log files...\"
-                    if [ -f /workspace/void-packages/masterdir/builddir/\${pkgname}*/\${pkgname}*.log ]; then
-                      echo \"Build log:\"
-                      cat /workspace/void-packages/masterdir/builddir/\${pkgname}*/\${pkgname}*.log
-                    fi
+                  [ -d "$pkg" ] || continue
+                  pkgname=$(basename "$pkg")
+                  echo "::group::Building $pkgname"
+                  echo "Running: ./xbps-src pkg $pkgname"
+                  if ! ./xbps-src pkg "$pkgname" 2>&1; then
+                    echo "Build failed for $pkgname"
+                    echo "Checking log files..."
+                    find masterdir/builddir -name "*.log" -exec echo "Log file: {}" \; -exec cat {} \;
                     exit 1
-                  }
-                  echo \"::endgroup::\"
+                  fi
+                  echo "::endgroup::"
                 done
                 
                 # List what was built
-                echo \"Checking for built packages...\"
-                ls -lah hostdir/binpkgs/ || echo \"No binpkgs directory\"
-                find hostdir/binpkgs -name '*.xbps' || echo \"No .xbps files found\"
-              "
+                echo "Checking for built packages..."
+                ls -lah hostdir/binpkgs/ || echo "No binpkgs directory"
+                find hostdir/binpkgs -name "*.xbps" || echo "No .xbps files found"
+              '
               
               # Copy built packages to shared workspace (as root again)
               if ls /workspace/void-packages/hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
