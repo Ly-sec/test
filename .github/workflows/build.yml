@@ -36,36 +36,40 @@ jobs:
               xbps-install -Sy
               xbps-install -y -u xbps
               xbps-install -y -u
-              xbps-install -y bash git ca-certificates libstdc++ libgcc tar gzip
+              xbps-install -y bash git ca-certificates libstdc++ libgcc tar gzip sudo
+              
+              # Create a non-root user for building
+              useradd -m -s /bin/bash builder
+              chown -R builder:builder /workspace
               
               # Clone void-packages if missing
               if [ ! -d void-packages ]; then
-                git clone --depth=1 https://github.com/void-linux/void-packages.git
+                su - builder -c "cd /workspace && git clone --depth=1 https://github.com/void-linux/void-packages.git"
               fi
               
-              cd void-packages
-              
               # Make xbps-src executable
-              chmod +x xbps-src
+              chmod +x /workspace/void-packages/xbps-src
               
-              # Check if xbps-src exists and is executable
-              ls -la xbps-src
+              # Run the build as the builder user
+              su - builder -c "
+                cd /workspace/void-packages
+                
+                # Bootstrap binary environment
+                ./xbps-src binary-bootstrap
+                
+                # Build only our custom packages
+                for pkg in /workspace/srcpkgs/*; do
+                  [ -d \"\$pkg\" ] || continue
+                  pkgname=\$(basename \"\$pkg\")
+                  echo \"::group::Building \$pkgname\"
+                  ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
+                  echo \"::endgroup::\"
+                done
+              "
               
-              # Bootstrap binary environment
-              bash ./xbps-src binary-bootstrap
-              
-              # Build only our custom packages
-              for pkg in /workspace/srcpkgs/*; do
-                [ -d "$pkg" ] || continue
-                pkgname=$(basename "$pkg")
-                echo "::group::Building $pkgname"
-                bash ./xbps-src pkg "$pkgname" || echo "Failed to build $pkgname"
-                echo "::endgroup::"
-              done
-              
-              # Copy built packages to shared workspace
-              if ls hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
-                cp hostdir/binpkgs/*/*.xbps /workspace/repo/
+              # Copy built packages to shared workspace (as root again)
+              if ls /workspace/void-packages/hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
+                cp /workspace/void-packages/hostdir/binpkgs/*/*.xbps /workspace/repo/
                 echo "Packages copied successfully"
               else
                 echo "No packages found to copy"
