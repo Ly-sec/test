@@ -9,72 +9,56 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: voidlinux/voidlinux:latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set stable VoidLinux mirror
+      - name: Set up Void builder and build packages
         run: |
-          cat > /etc/xbps.d/00-repository.conf <<EOF
-          repository=https://repo-fastly.voidlinux.org/current
-          repository=https://repo-fastly.voidlinux.org/current/nonfree
-          repository=https://repo-fastly.voidlinux.org/current/multilib
-          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-          EOF
+          # Run everything inside Void Linux Docker container
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            -w /workspace \
+            voidlinux/voidlinux:latest \
+            sh -c "
+              # Set fast stable mirrors
+              cat > /etc/xbps.d/00-repository.conf <<EOF
+              repository=https://repo-fastly.voidlinux.org/current
+              repository=https://repo-fastly.voidlinux.org/current/nonfree
+              repository=https://repo-fastly.voidlinux.org/current/multilib
+              repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+              EOF
 
-      - name: Update xbps (required)
-        run: |
-          xbps-install -Sy
-          xbps-install -y -u xbps
+              # Update xbps and install dependencies
+              xbps-install -Sy xbps git tar gzip
 
-      - name: Install system dependencies
-        run: |
-          xbps-install -y \
-            git \
-            ca-certificates \
-            libstdc++ \
-            libgcc \
-            tar gzip
+              # Clone void-packages and bootstrap
+              git clone https://github.com/void-linux/void-packages.git
+              cd void-packages
+              ./xbps-src binary-bootstrap
 
-      - name: Install Node for GitHub Actions
-        run: |
-          xbps-install -Sy
-          xbps-install -y nodejs npm libstdc++ libgcc
+              # Copy your packages into void-packages/srcpkgs
+              mkdir -p srcpkgs
+              cp -r /workspace/srcpkgs/* srcpkgs/
 
-      - name: Clone void-packages
-        run: |
-          git clone https://github.com/void-linux/void-packages.git
-          cd void-packages
-          ./xbps-src binary-bootstrap
+              # Build only your packages
+              for pkg in srcpkgs/*; do
+                [ -d \"\$pkg\" ] || continue
+                pkgname=\$(basename \"\$pkg\")
+                echo \"Building \$pkgname\"
+                ./xbps-src pkg \$pkgname
+              done
 
-      - name: Copy our packages
-        run: |
-          cp -r ../srcpkgs/* void-packages/srcpkgs/
+              # Collect built packages
+              mkdir -p /workspace/repo
+              cp hostdir/binpkgs/*/*.xbps /workspace/repo/
 
-      - name: Build only our packages
-        run: |
-          cd void-packages
-          for pkg in srcpkgs/*; do
-            [ -d "$pkg" ] || continue
-            pkgname=$(basename "$pkg")
-            echo "::group::Building $pkgname"
-            ./xbps-src pkg "$pkgname"
-            echo "::endgroup::"
-          done
+              # Generate repo index
+              xbps-rindex -a /workspace/repo/*.xbps
+              xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
+            "
 
-      - name: Collect built packages
-        run: |
-          mkdir -p repo
-          cp void-packages/hostdir/binpkgs/*/*.xbps repo/
-
-      - name: Generate repository index
-        run: |
-          xbps-rindex -a repo/*.xbps
-
-      - name: Upload repo artifact
+      - name: Upload repository artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
