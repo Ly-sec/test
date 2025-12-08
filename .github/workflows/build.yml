@@ -20,7 +20,7 @@ jobs:
             -v "${{ github.workspace }}":/workspace \
             -w /workspace \
             voidlinux/voidlinux:latest \
-            bash -c '
+            sh -c '
               set -ex
               
               # Set fast Void mirror
@@ -36,7 +36,7 @@ jobs:
               xbps-install -Sy
               xbps-install -y -u xbps
               xbps-install -y -u
-              xbps-install -y git ca-certificates libstdc++ libgcc tar gzip bash
+              xbps-install -y bash git ca-certificates libstdc++ libgcc tar gzip
               
               # Clone void-packages if missing
               if [ ! -d void-packages ]; then
