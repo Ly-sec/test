@@ -9,89 +9,66 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: voidlinux/voidlinux:latest
+
     steps:
-      # -----------------------------------------------------
-      # Checkout your repository
-      # -----------------------------------------------------
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      # -----------------------------------------------------
-      # Ensure repo folder exists (needed for artifact upload)
-      # -----------------------------------------------------
-      - name: Prepare repo folder
-        run: mkdir -p repo
-
-      # -----------------------------------------------------
-      # Build packages in Void container
-      # -----------------------------------------------------
-      - name: Build packages in Void container
+      - name: Set stable VoidLinux mirror
         run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -w /workspace \
-            voidlinux/voidlinux:latest \
-            sh -c "
-              # ----------------------------
-              # Set stable mirrors
-              # ----------------------------
-              cat > /etc/xbps.d/00-repository.conf <<EOF
-              repository=https://repo-fastly.voidlinux.org/current
-              repository=https://repo-fastly.voidlinux.org/current/nonfree
-              repository=https://repo-fastly.voidlinux.org/current/multilib
-              repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-              EOF
+          cat > /etc/xbps.d/00-repository.conf <<EOF
+          repository=https://repo-fastly.voidlinux.org/current
+          repository=https://repo-fastly.voidlinux.org/current/nonfree
+          repository=https://repo-fastly.voidlinux.org/current/multilib
+          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+          EOF
 
-              # ----------------------------
-              # Update xbps
-              # ----------------------------
-              xbps-install -Sy
-              xbps-install -y -u xbps
+      - name: Update xbps (required)
+        run: |
+          xbps-install -Sy
+          xbps-install -y -u xbps
 
-              # ----------------------------
-              # Install system dependencies
-              # ----------------------------
-              xbps-install -y git tar gzip libstdc++ libgcc ca-certificates
+      - name: Install system dependencies
+        run: |
+          xbps-install -y \
+            git \
+            ca-certificates \
+            libstdc++ \
+            libgcc \
+            tar gzip
 
-              # ----------------------------
-              # Clone void-packages and bootstrap
-              # ----------------------------
-              git clone https://github.com/void-linux/void-packages.git
-              ./void-packages/xbps-src binary-bootstrap
+      - name: Clone void-packages
+        run: |
+          git clone https://github.com/void-linux/void-packages.git
+          cd void-packages
+          ./xbps-src binary-bootstrap
 
-              # ----------------------------
-              # Copy only our packages
-              # ----------------------------
-              mkdir -p void-packages/srcpkgs
-              cp -r srcpkgs/* void-packages/srcpkgs/
+      - name: Copy our packages
+        run: |
+          cp -r ../srcpkgs/* void-packages/srcpkgs/
 
-              # ----------------------------
-              # Build our packages only
-              # ----------------------------
-              cd void-packages
-              for pkg in srcpkgs/*; do
-                [ -d \"\$pkg\" ] || continue
-                pkgname=\$(basename \"\$pkg\")
-                echo \"::group::Building \$pkgname\"
-                ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
-                echo \"::endgroup::\"
-              done
+      - name: Build only our packages
+        run: |
+          cd void-packages
+          for pkg in srcpkgs/*; do
+            [ -d "$pkg" ] || continue
+            pkgname=$(basename "$pkg")
+            echo "::group::Building $pkgname"
+            ./xbps-src pkg "$pkgname"
+            echo "::endgroup::"
+          done
 
-              # ----------------------------
-              # Collect built packages
-              # ----------------------------
-              mkdir -p /workspace/repo
-              cp hostdir/binpkgs/*.xbps /workspace/repo/ || true
+      - name: Collect built packages
+        run: |
+          mkdir -p repo
+          cp void-packages/hostdir/binpkgs/*/*.xbps repo/
 
-              # ----------------------------
-              # Generate repository index
-              # ----------------------------
-              xbps-rindex -a /workspace/repo/*.xbps || true
-              xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
-            "
+      - name: Generate repository index
+        run: |
+          xbps-rindex -a repo/*.xbps
 
-      # -----------------------------------------------------
-      # Upload repo artifact for GitHub Pages
-      # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -105,9 +82,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Deploy to GitHub Pages
-        id: deployment
         uses: actions/deploy-pages@v4
