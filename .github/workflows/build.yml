@@ -74,7 +74,7 @@ jobs:
                 
                 # Bootstrap binary environment
                 echo \"::group::Bootstrap binary environment\"
-                ./xbps-src binary-bootstrap
+                ./xbps-src binary-bootstrap 2>&1
                 echo \"::endgroup::\"
                 
                 # Build custom packages
@@ -82,9 +82,23 @@ jobs:
                   [ -d \"\$pkg\" ] || continue
                   pkgname=\$(basename \"\$pkg\")
                   echo \"::group::Building \$pkgname\"
-                  ./xbps-src pkg \"\$pkgname\"
+                  echo \"Running: ./xbps-src pkg \$pkgname\"
+                  ./xbps-src pkg \"\$pkgname\" 2>&1 || {
+                    echo \"Build failed for \$pkgname\"
+                    echo \"Checking log files...\"
+                    if [ -f /workspace/void-packages/masterdir/builddir/\${pkgname}*/\${pkgname}*.log ]; then
+                      echo \"Build log:\"
+                      cat /workspace/void-packages/masterdir/builddir/\${pkgname}*/\${pkgname}*.log
+                    fi
+                    exit 1
+                  }
                   echo \"::endgroup::\"
                 done
+                
+                # List what was built
+                echo \"Checking for built packages...\"
+                ls -lah hostdir/binpkgs/ || echo \"No binpkgs directory\"
+                find hostdir/binpkgs -name '*.xbps' || echo \"No .xbps files found\"
               "
               
               # Copy built packages to shared workspace (as root again)
