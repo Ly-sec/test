@@ -9,47 +9,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: voidlinux/voidlinux:latest
-
     steps:
       # -----------------------------------------------------
-      # Checkout repository
+      # Checkout your repository
       # -----------------------------------------------------
       - uses: actions/checkout@v4
 
       # -----------------------------------------------------
-      # Fix Void repo mirrors
-      # -----------------------------------------------------
-      - name: Set stable VoidLinux mirror
-        run: |
-          cat > /etc/xbps.d/00-repository.conf <<EOF
-          repository=https://repo-fastly.voidlinux.org/current
-          repository=https://repo-fastly.voidlinux.org/current/nonfree
-          repository=https://repo-fastly.voidlinux.org/current/multilib
-          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-          EOF
-
-      # -----------------------------------------------------
-      # Mandatory: update xbps first
-      # -----------------------------------------------------
-      - name: Update xbps
-        run: |
-          xbps-install -Sy
-          xbps-install -y -u xbps
-
-      # -----------------------------------------------------
-      # Install system dependencies
+      # Install system dependencies needed for xbps-src
       # -----------------------------------------------------
       - name: Install system dependencies
         run: |
-          xbps-install -y -u
-          xbps-install -y \
-            git \
-            ca-certificates \
-            libstdc++ \
-            libgcc \
-            tar gzip
+          sudo apt-get update
+          sudo apt-get install -y git tar gzip libstdc++6 libgcc1
 
       # -----------------------------------------------------
       # Clone void-packages
@@ -58,25 +30,33 @@ jobs:
         run: git clone https://github.com/void-linux/void-packages.git
 
       # -----------------------------------------------------
-      # Bootstrap xbps-src
+      # Bootstrap xbps-src (creates hostdir)
       # -----------------------------------------------------
       - name: Bootstrap xbps-src
         run: ./xbps-src binary-bootstrap
         working-directory: ${{ github.workspace }}/void-packages
 
       # -----------------------------------------------------
-      # Build all packages in srcpkgs/*
+      # Copy our plugins/packages into void-packages/srcpkgs
       # -----------------------------------------------------
-      - name: Build packages
+      - name: Copy our packages
         run: |
-          for pkg in ../../srcpkgs/*; do
+          mkdir -p void-packages/srcpkgs
+          cp -r srcpkgs/* void-packages/srcpkgs/
+
+      # -----------------------------------------------------
+      # Build ONLY our packages
+      # -----------------------------------------------------
+      - name: Build our packages
+        run: |
+          cd void-packages
+          for pkg in srcpkgs/*; do
             [ -d "$pkg" ] || continue
             pkgname=$(basename "$pkg")
             echo "::group::Building $pkgname"
             ./xbps-src pkg "$pkgname"
             echo "::endgroup::"
           done
-        working-directory: ${{ github.workspace }}/void-packages
 
       # -----------------------------------------------------
       # Collect built packages
@@ -95,16 +75,13 @@ jobs:
           xbps-rindex --sign --signedby "github-actions" repo || true
 
       # -----------------------------------------------------
-      # Upload repository artifact for GitHub Pages
+      # Upload repo artifact for GitHub Pages
       # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
 
-  # ---------------------------------------------------------
-  # Deploy to GitHub Pages
-  # ---------------------------------------------------------
   deploy:
     needs: build
     permissions:
