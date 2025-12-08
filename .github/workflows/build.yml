@@ -21,44 +21,8 @@ jobs:
             -w /workspace \
             voidlinux/voidlinux:latest \
             /bin/sh -c "
-              # Set fast Void mirror
-              cat > /etc/xbps.d/00-repository.conf <<EOF
-          repository=https://repo-fastly.voidlinux.org/current
-          repository=https://repo-fastly.voidlinux.org/current/nonfree
-          repository=https://repo-fastly.voidlinux.org/current/multilib
-          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-          EOF
+              set -ex
               
-              # Update xbps and system
-              xbps-install -Sy
-              xbps-install -y -u xbps
-              xbps-install -y -u
-              xbps-install -y git ca-certificates libstdc++ libgcc tar gzip
-              
-              # Clone void-packages if missing
-              [ -d void-packages ] || git clone https://github.com/void-linux/void-packages.git
-              cd void-packages
-              
-              # Bootstrap binary environment
-              ./xbps-src binary-bootstrap
-              
-              # Build only our custom packages
-              for pkg in /workspace/srcpkgs/*; do
-                [ -d \"\$pkg\" ] || continue
-                pkgname=\$(basename \"\$pkg\")
-                echo \"::group::Building \$pkgname\"
-                ./xbps-src pkg \"\$pkgname\" || echo \"Failed to build \$pkgname\"
-                echo \"::endgroup::\"
-              done
-              
-              # Copy built packages to shared workspace
-              if ls hostdir/binpkgs/*/*.xbps 1> /dev/null 2>&1; then
-                cp hostdir/binpkgs/*/*.xbps /workspace/repo/
-                echo \"Packages copied successfully\"
-              else
-                echo \"No packages found to copy\"
-              fi
-            "
       
       - name: Verify repo contents
         run: |
