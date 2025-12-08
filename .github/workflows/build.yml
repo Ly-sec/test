@@ -9,9 +9,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    container:
-      image: voidlinux/voidlinux:latest
-
     steps:
       # -----------------------------------------------------
       # Checkout your repository
@@ -19,60 +16,68 @@ jobs:
       - uses: actions/checkout@v4
 
       # -----------------------------------------------------
-      # Set stable Void Linux mirrors
+      # Install Docker (needed to run Void container)
       # -----------------------------------------------------
-      - name: Set stable VoidLinux mirror
+      - name: Install Docker
+        run: sudo apt-get update && sudo apt-get install -y docker.io
+
+      # -----------------------------------------------------
+      # Build packages in Void container
+      # -----------------------------------------------------
+      - name: Build packages in Void container
         run: |
-          cat > /etc/xbps.d/00-repository.conf <<EOF
-          repository=https://repo-fastly.voidlinux.org/current
-          repository=https://repo-fastly.voidlinux.org/current/nonfree
-          repository=https://repo-fastly.voidlinux.org/current/multilib
-          repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
-          EOF
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            voidlinux/voidlinux:latest \
+            sh -c "
+              # Set stable mirrors
+              cat > /etc/xbps.d/00-repository.conf <<EOF
+              repository=https://repo-fastly.voidlinux.org/current
+              repository=https://repo-fastly.voidlinux.org/current/nonfree
+              repository=https://repo-fastly.voidlinux.org/current/multilib
+              repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
+              EOF
 
-      - name: Update xbps
-        run: |
-          xbps-install -Sy
-          xbps-install -y -u xbps
+              # Update xbps
+              xbps-install -Sy
+              xbps-install -y -u xbps
 
-      - name: Install system dependencies
-        run: |
-          xbps-install -y -u
-          xbps-install -y git tar gzip libstdc++ libgcc ca-certificates
+              # Install dependencies
+              xbps-install -y git tar gzip libstdc++ libgcc ca-certificates
 
-      - name: Clone void-packages
-        run: git clone https://github.com/void-linux/void-packages.git
+              # Clone void-packages
+              git clone https://github.com/void-linux/void-packages.git
 
-      - name: Bootstrap xbps-src
-        run: ./xbps-src binary-bootstrap
-        working-directory: ${{ github.workspace }}/void-packages
+              # Bootstrap xbps-src
+              ./void-packages/xbps-src binary-bootstrap
 
-      - name: Copy our packages
-        run: |
-          mkdir -p void-packages/srcpkgs
-          cp -r srcpkgs/* void-packages/srcpkgs/
+              # Copy our packages
+              mkdir -p void-packages/srcpkgs
+              cp -r srcpkgs/* void-packages/srcpkgs/
 
-      - name: Build our packages
-        run: |
-          cd void-packages
-          for pkg in srcpkgs/*; do
-            [ -d "$pkg" ] || continue
-            pkgname=$(basename "$pkg")
-            echo "::group::Building $pkgname"
-            ./xbps-src pkg "$pkgname"
-            echo "::endgroup::"
-          done
+              # Build only our packages
+              cd void-packages
+              for pkg in srcpkgs/*; do
+                [ -d \"\$pkg\" ] || continue
+                pkgname=\$(basename \"\$pkg\")
+                echo \"::group::Building \$pkgname\"
+                ./xbps-src pkg \"\$pkgname\"
+                echo \"::endgroup::\"
+              done
 
-      - name: Collect packages
-        run: |
-          mkdir -p repo
-          cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
+              # Collect built packages
+              mkdir -p /workspace/repo
+              cp hostdir/binpkgs/*.xbps /workspace/repo/ || true
 
-      - name: Generate repository index
-        run: |
-          xbps-rindex -a repo/*.xbps
-          xbps-rindex --sign --signedby "github-actions" repo || true
+              # Generate repo index
+              xbps-rindex -a /workspace/repo/*.xbps
+              xbps-rindex --sign --signedby 'github-actions' /workspace/repo || true
+            "
 
+      # -----------------------------------------------------
+      # Upload repo artifact for GitHub Pages
+      # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
