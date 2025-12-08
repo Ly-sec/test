@@ -39,6 +39,11 @@ jobs:
             libgcc \
             tar gzip
 
+      - name: Install Node for GitHub Actions
+        run: |
+          xbps-install -Sy
+          xbps-install -y nodejs npm libstdc++ libgcc
+
       - name: Clone void-packages
         run: |
           git clone https://github.com/void-linux/void-packages.git
