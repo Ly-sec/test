@@ -70,7 +70,7 @@ jobs:
 
               # Use fast Void mirrors to avoid SSL errors
               mkdir -p /etc/xbps.d
-              cat > /etc/xbps.d/00-repository.conf << "EOF"
+              cat > /etc/xbps.d/00-repository.conf <<EOF
 repository=https://repo-fastly.voidlinux.org/current
 repository=https://repo-fastly.voidlinux.org/current/nonfree
 repository=https://repo-fastly.voidlinux.org/current/multilib
