@@ -13,8 +13,14 @@ jobs:
       image: voidlinux/voidlinux:latest
 
     steps:
+      # -----------------------------------------------------
+      # Checkout repository
+      # -----------------------------------------------------
       - uses: actions/checkout@v4
 
+      # -----------------------------------------------------
+      # Fix Void repo mirrors
+      # -----------------------------------------------------
       - name: Set stable VoidLinux mirror
         run: |
           cat > /etc/xbps.d/00-repository.conf <<EOF
@@ -24,11 +30,17 @@ jobs:
           repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
           EOF
 
+      # -----------------------------------------------------
+      # Mandatory: update xbps first
+      # -----------------------------------------------------
       - name: Update xbps
         run: |
           xbps-install -Sy
           xbps-install -y -u xbps
 
+      # -----------------------------------------------------
+      # Install system dependencies
+      # -----------------------------------------------------
       - name: Install system dependencies
         run: |
           xbps-install -y -u
@@ -39,14 +51,22 @@ jobs:
             libgcc \
             tar gzip
 
+      # -----------------------------------------------------
+      # Clone void-packages
+      # -----------------------------------------------------
       - name: Clone void-packages
         run: git clone https://github.com/void-linux/void-packages.git
-        working-directory: ${{ github.workspace }}
 
+      # -----------------------------------------------------
+      # Bootstrap xbps-src
+      # -----------------------------------------------------
       - name: Bootstrap xbps-src
         run: ./xbps-src binary-bootstrap
         working-directory: ${{ github.workspace }}/void-packages
 
+      # -----------------------------------------------------
+      # Build all packages in srcpkgs/*
+      # -----------------------------------------------------
       - name: Build packages
         run: |
           for pkg in ../../srcpkgs/*; do
@@ -58,24 +78,33 @@ jobs:
           done
         working-directory: ${{ github.workspace }}/void-packages
 
+      # -----------------------------------------------------
+      # Collect built packages
+      # -----------------------------------------------------
       - name: Collect packages
         run: |
           mkdir -p repo
           cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
-        working-directory: ${{ github.workspace }}
 
+      # -----------------------------------------------------
+      # Generate repository index
+      # -----------------------------------------------------
       - name: Generate repository index
         run: |
           xbps-rindex -a repo/*.xbps
           xbps-rindex --sign --signedby "github-actions" repo || true
-        working-directory: ${{ github.workspace }}
 
+      # -----------------------------------------------------
+      # Upload repository artifact for GitHub Pages
+      # -----------------------------------------------------
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
-        working-directory: ${{ github.workspace }}
 
+  # ---------------------------------------------------------
+  # Deploy to GitHub Pages
+  # ---------------------------------------------------------
   deploy:
     needs: build
     permissions:
