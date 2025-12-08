@@ -13,6 +13,8 @@ jobs:
       image: voidlinux/voidlinux:latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Set stable VoidLinux mirror
         run: |
           cat > /etc/xbps.d/00-repository.conf <<EOF
@@ -22,7 +24,7 @@ jobs:
           repository=https://repo-fastly.voidlinux.org/current/multilib/nonfree
           EOF
 
-      - name: Update xbps (required)
+      - name: Update xbps
         run: |
           xbps-install -Sy
           xbps-install -y -u xbps
@@ -37,39 +39,42 @@ jobs:
             libgcc \
             tar gzip
 
-      - uses: actions/checkout@v4
+      - name: Clone void-packages
+        run: git clone https://github.com/void-linux/void-packages.git
+        working-directory: ${{ github.workspace }}
 
-      - name: Install xbps-src (void-packages)
-        run: |
-          git clone https://github.com/void-linux/void-packages.git
-          cd void-packages
-          ./xbps-src binary-bootstrap
+      - name: Bootstrap xbps-src
+        run: ./xbps-src binary-bootstrap
+        working-directory: ${{ github.workspace }}/void-packages
 
       - name: Build packages
         run: |
-          cd void-packages
-          for pkg in ../srcpkgs/*; do
+          for pkg in ../../srcpkgs/*; do
             [ -d "$pkg" ] || continue
             pkgname=$(basename "$pkg")
             echo "::group::Building $pkgname"
             ./xbps-src pkg "$pkgname"
             echo "::endgroup::"
           done
+        working-directory: ${{ github.workspace }}/void-packages
 
       - name: Collect packages
         run: |
           mkdir -p repo
           cp void-packages/hostdir/binpkgs/*.xbps repo/ || true
+        working-directory: ${{ github.workspace }}
 
       - name: Generate repository index
         run: |
           xbps-rindex -a repo/*.xbps
           xbps-rindex --sign --signedby "github-actions" repo || true
+        working-directory: ${{ github.workspace }}
 
       - name: Upload repo artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: repo
+        working-directory: ${{ github.workspace }}
 
   deploy:
     needs: build
