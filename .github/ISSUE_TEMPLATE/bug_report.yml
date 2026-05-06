@@ -80,7 +80,7 @@ body:
         - Desktop environment / compositor:
         - Noctalia version or commit:
         - Installation method:
-        - GPU / driver (if graphical issue):
+        - GPU:
       placeholder: |
         Distribution: Arch Linux
         Desktop environment: Hyprland
