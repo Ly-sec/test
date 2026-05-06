@@ -2,7 +2,7 @@ name: Bug Report
 description: Report a bug or regression in Noctalia
 title: "[BUG] "
 labels: ["bug"]
-assignees: [ly-sec, ItsLemmy]
+assignees: [Ly-sec, ItsLemmy]
 
 body:
   - type: checkboxes
@@ -68,6 +68,21 @@ body:
         Large outputs can be wrapped in a `<details>` block.
       render: text
 
+  - type: dropdown
+    id: compositor
+    attributes:
+      label: Desktop environment / compositor
+      description: Select the compositor where the issue occurs.
+      options:
+        - Niri
+        - Hyprland
+        - Sway
+        - Scroll
+        - Labwc
+        - MangoWC
+    validations:
+      required: true
+
   - type: textarea
     id: environment
     attributes:
@@ -76,13 +91,11 @@ body:
         Please provide relevant system information:
 
         - Distribution:
-        - Desktop environment / compositor:
         - Noctalia version or commit:
         - Installation method:
         - GPU:
       placeholder: |
         Distribution: Arch Linux
-        Desktop environment: Hyprland
         Noctalia version: main / commit hash
         Installation method: AUR
         GPU: AMD RX 7800 XT (amdgpu)

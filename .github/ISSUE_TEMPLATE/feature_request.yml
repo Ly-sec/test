@@ -1,8 +1,8 @@
 name: Feature Request
 description: Suggest an improvement, new feature, or enhancement for Noctalia
 title: "[FEATURE] "
-labels: ["enhancement"]
-assignees: [ly-sec, ItsLemmy]
+labels: ["feature"]
+assignees: [Ly-sec, ItsLemmy]
 
 body:
   - type: checkboxes
