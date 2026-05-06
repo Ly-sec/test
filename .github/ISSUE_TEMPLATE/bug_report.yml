@@ -80,6 +80,24 @@ body:
         - Scroll
         - Labwc
         - MangoWC
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: distribution
+    attributes:
+      label: Distribution family
+      description: Select the Linux distribution family where the issue occurs.
+      options:
+        - Arch-based
+        - Fedora-based
+        - Debian-based
+        - Gentoo-based
+        - NixOS
+        - openSUSE-based
+        - Void-based
+        - Other
     validations:
       required: true
 
@@ -90,12 +108,11 @@ body:
       description: |
         Please provide relevant system information:
 
-        - Distribution:
+        If you selected `Other` for distribution and/or compositor, please specify the exact one(s) here.
         - Noctalia version or commit:
         - Installation method:
         - GPU:
       placeholder: |
-        Distribution: Arch Linux
         Noctalia version: main / commit hash
         Installation method: AUR
         GPU: AMD RX 7800 XT (amdgpu)
