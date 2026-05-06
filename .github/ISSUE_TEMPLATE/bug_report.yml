@@ -64,7 +64,6 @@ body:
         - journalctl output
         - terminal errors
         - crash logs
-        - browser console output (if applicable)
 
         Large outputs can be wrapped in a `<details>` block.
       render: text
